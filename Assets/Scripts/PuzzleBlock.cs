@@ -52,6 +52,11 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     {
         X = x;
         Y = y;
+        SetAttribute(type, sprite);
+    }
+
+    public void SetAttribute(PuzzleAttribute type, Sprite sprite)
+    {
         Type = type;
         blockImage.sprite = sprite;
     }
@@ -65,10 +70,9 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     /// <param name="sprite">プロック画像</param>
     public void Initislizer(PuzzleAttribute type, int x, int y, Sprite sprite)
     {
-        Type = type;
         X = x;
         Y = y;
-        blockImage.sprite = sprite;
+        SetAttribute(type, sprite);
     }
 
     /// <summary>
@@ -141,5 +145,16 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
         {
             rectTransform.anchoredPosition = startPointerPostion;
         }
+
+        // 後で
+    }
+
+    /// <summary>
+    /// マッチ判定結果を色で表示する
+    /// </summary>
+    /// <param name="matched"></param>
+    public void SetMatched(bool matched)
+    {
+        blockImage.color = matched ? new Color(1f, 0.5f, 0.5f, 1f) : Color.white;
     }
 }

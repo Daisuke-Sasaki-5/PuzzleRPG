@@ -1,5 +1,5 @@
 using UnityEngine;
-
+using System.Collections.Generic;
 public class PuzzleBoard : MonoBehaviour
 {
     [Header("Prefabと生成先")]
@@ -36,6 +36,9 @@ public class PuzzleBoard : MonoBehaviour
 
     // PuzzleBlockから参照する
     public RectTransform PiecesRoot => PiceRoot;
+
+    public PuzzleBlock[,] Pieces => board;
+    private PuzzleMatchPreview matchPreview;
 
     private void Start()
     {
@@ -153,11 +156,11 @@ public class PuzzleBoard : MonoBehaviour
             // 縦方向の移動
             if(delta.y > 0f)
             {
-                targetY++;
+                targetY--;
             }
             else
             {
-                targetY--;
+                targetY++;
             }
         }
 
@@ -205,18 +208,71 @@ public class PuzzleBoard : MonoBehaviour
         pieceB.name = $"Piece_{ax}_{ay}";
 
         Debug.Log($"石を交換しました : ({ax},{ay} <=> ({bx},{by}");
+
+        CheckMatches();
     }
 
-    //public PuzzleBlock GetPiece(int x, int y)
-    //{
-    //    if(board == null)
-    //    {
-    //        return null;
-    //    }
-    //    if(x < 0 || x >= width || y < 0 || y >= height)
-    //    {
-    //        return null;
-    //    }
+    public PuzzleBlock GetPiece(int x, int y)
+    {
+        if (board == null)
+        {
+            return null;
+        }
+        if (x < 0 || x >= width ||
+            y < 0 || y >= height)
+        {
+            return null;
+        }
+        return board[x, y];
+    }
 
-    //}
+    private void CheckHorizintalMatches()
+    {
+        // 各行を上から順番に調べる
+        for(int y = 0; y < height; y++)
+        {
+            // 横方向に３個並んでるか確認
+            for (int x = 0; x < width - 2; x++)
+            {
+                PuzzleBlock piece1 = board[x, y];
+                PuzzleBlock piece2 = board[x + 1, y];
+                PuzzleBlock piece3 = board[x + 2, y];
+
+                // 3個とも同じ属性か調べる
+                if(piece1.Type == piece2.Type &&  piece2.Type == piece3.Type)
+                {
+                    Debug.Log($"横マッチ:({x},{y}) 属性 : {piece1.Type}");
+                }
+            }
+        }
+    }
+
+    private void CheckVerticalMatches()
+    {
+        // 各列を左から順に調べる
+        for(int x = 0; x < width; x++)
+        {
+            // 縦方向に３個以上並んでいるか確認
+            for( int y = 0; y < height - 2; y++)
+            {
+                PuzzleBlock piece1 = board[x, y];
+                PuzzleBlock piece2 = board[x, y + 1];
+                PuzzleBlock piece3 = board[x, y + 2];
+
+                // 3個とも同じ属性か調べる
+                if (piece1.Type == piece2.Type && piece2.Type == piece3.Type)
+                {
+                    Debug.Log($"縦マッチ:({x},{y}) 属性 : {piece1.Type}");
+                }
+            }
+        }
+    }
+
+    private void CheckMatches()
+    {
+        Debug.Log("マッチ判定開始");
+        CheckHorizintalMatches();
+        CheckVerticalMatches();
+        Debug.Log("マッチ判定終了");
+    }
 }
