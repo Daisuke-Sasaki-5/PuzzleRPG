@@ -1,5 +1,8 @@
-using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
+using System.Runtime.Serialization.Formatters;
+using UnityEngine;
+
 public class PuzzleBoard : MonoBehaviour
 {
     [Header("Prefabと生成先")]
@@ -39,6 +42,13 @@ public class PuzzleBoard : MonoBehaviour
 
     public PuzzleBlock[,] Pieces => board;
     private PuzzleMatchPreview matchPreview;
+
+    private PuzzleResolver resolver;
+    public bool IsResolving => resolver != null && resolver.IsBusy;
+
+    private bool isOperating;
+
+    public bool IsOperating => isOperating || IsResolving;
 
     private void Start()
     {
@@ -209,7 +219,7 @@ public class PuzzleBoard : MonoBehaviour
 
         Debug.Log($"石を交換しました : ({ax},{ay} <=> ({bx},{by}");
 
-        CheckMatches();
+        //CheckMatches();
     }
 
     public PuzzleBlock GetPiece(int x, int y)
@@ -226,53 +236,283 @@ public class PuzzleBoard : MonoBehaviour
         return board[x, y];
     }
 
-    private void CheckHorizintalMatches()
+    /// <summary>
+    /// 操作開始時に前回の判定を消す
+    /// </summary>
+    public bool BeginOperation()
     {
-        // 各行を上から順番に調べる
+        if(isOperating || HasEmptyCells())
+        {
+            return false;
+        }
+        isOperating = true;
+
+        if(matchPreview != null)
+        {
+            matchPreview.ClearHighlights();
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 操作終了時に盤面を判定する
+    /// </summary>
+    public void EndOperation()
+    {
+        if (!isOperating) { return; }
+
+        isOperating = false;
+        if(resolver != null)
+        {
+            resolver.TryResolve(); 
+        }
+        else if(matchPreview != null)
+        {
+            matchPreview.ShowMatches();
+        }
+    }
+
+    /// <summary>
+    /// 石のTransformを設定する
+    /// </summary>
+    /// <param name="piece"></param>
+    /// <returns></returns>
+    private RectTransform configurePiceRect(PuzzleBlock piece)
+    {
+        RectTransform rect = piece.GetComponent<RectTransform>();
+        rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0f, 1f);
+        rect.localScale = Vector3.one;
+        rect.localRotation = Quaternion.identity;
+        rect.sizeDelta = new Vector2(cellSize, cellSize);
+        return rect;
+    }
+
+    /// <summary>
+    /// 空きマスが存在するか確認
+    /// </summary>
+    /// <returns></returns>
+    public bool HasEmptyCells()
+    {
+        if(board == null)
+        {
+            return false;
+        }
+        foreach (PuzzleBlock piece in board)
+        {
+            if(piece == null)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 石を削除
+    /// </summary>
+    /// <param name="marks"></param>
+    /// <returns></returns>
+    public int RemoveMarked(bool[,] marks)
+    {
+        int removed = 0;
+        for(int y = 0; y < height;  y++)
+        {
+            for(int x = 0; x < width; x++)
+            {
+                if(!marks[x, y] || board[x,y] == null) { continue; }
+                PuzzleBlock piece = board[x,y];
+                // 配列から参照を外す
+                board[x,y] = null;
+
+                piece.gameObject.SetActive(false);
+                Destroy(piece.gameObject);
+                removed++;
+            }
+        }
+        return removed;
+    }
+
+    /// <summary>
+    /// 残った石を下方向につめる
+    /// </summary>
+    public void CollapsePieces()
+    {
+        for(int x = 0; x < height; x++)
+        {
+            int writeY = height - 1;
+            // 下から上へ調べる
+            for(int readY = height - 1; readY >= 0; readY--)
+            {
+                PuzzleBlock piece = board[x, readY];
+                if(piece == null) { continue;}
+                if(readY != writeY)
+                {
+                    board[x,readY] = null;
+                    board[x,writeY] = piece;
+                }
+
+                piece.SetCoordinates(x, writeY);
+                writeY--;
+            }
+        }
+    }
+
+    public void RefillPiece(bool useFixedRefill)
+    {
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (board[x, y] != null) { continue; }
+                int index;
+
+                if (useFixedRefill)
+                {
+                    // 固定テスト用
+                    index = (x + 2 * y) % 5;
+                }
+                else
+                {
+                    index = Random.Range(0, blockSprite.Length);
+                }
+                PuzzleBlock piece = Instantiate(PuzzlePicePrefab, PiceRoot, false);
+
+                piece.Setup(x, y, (PuzzleAttribute)index, blockSprite[index]);
+
+                piece.SetBoard(this);
+                RectTransform rect = configurePiceRect(piece);
+
+                rect.anchoredPosition = GetCellPosition(x, y - height);
+                board[x, y] = piece;
+            }
+        }
+    }
+
+    public IEnumerator AnimateToCells(float duration)
+    {
+        List<RectTransform> rects = new List<RectTransform> ();
+        List<Vector2> starts = new List<Vector2> ();
+        List<Vector2> target = new List<Vector2> ();
+
+        for(int y = 0; y < height;y++)
+        {
+            for(int x = 0; x < width;x++)
+            {
+                PuzzleBlock piece = board[x, y];
+                if(piece == null) { continue; }
+                RectTransform rect = piece.GetComponent<RectTransform>();
+
+                rects.Add(rect);
+                starts.Add(rect.anchoredPosition);
+                target.Add(GetCellPosition(x, y));
+            }
+        }
+
+        float elapsed = 0f;
+        if(duration > 0f)
+        {
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01 (elapsed / duration);
+
+                for(int i = 0; i < rects.Count; i++)
+                {
+                    rects[i].anchoredPosition = Vector2.Lerp(starts[i], target[i], t);
+                }
+                yield return null;
+            }
+        }
+
+        for(int i =0; i < rects.Count;i++)
+        {
+            rects[i].anchoredPosition = target[i];
+        }
+    }
+
+    public bool ValidateBoard()
+    {
+        if(board == null) {  return false; }
+        bool valid = true;
+
+        HashSet<PuzzleBlock> found = new HashSet<PuzzleBlock>();
+
         for(int y = 0; y < height; y++)
         {
-            // 横方向に３個並んでるか確認
-            for (int x = 0; x < width - 2; x++)
+            for(int x = 0; x < width; x++)
             {
-                PuzzleBlock piece1 = board[x, y];
-                PuzzleBlock piece2 = board[x + 1, y];
-                PuzzleBlock piece3 = board[x + 2, y];
-
-                // 3個とも同じ属性か調べる
-                if(piece1.Type == piece2.Type &&  piece2.Type == piece3.Type)
+                PuzzleBlock piece = board[x, y];
+                if(piece == null) { valid = false; continue; }
+                
+                if(!found.Add(piece))
                 {
-                    Debug.Log($"横マッチ:({x},{y}) 属性 : {piece1.Type}");
+                    valid = false;
+                }
+
+                if(piece.X != x || piece.Y != y)
+                {
+                    valid |= false;
+                }
+
+                Vector2 position = piece.GetComponent<RectTransform>().anchoredPosition;
+
+                if (Vector2.Distance(position, GetCellPosition(x,y)) > 0.1f)
+                {
+                    valid = false;
                 }
             }
         }
+        return valid;
     }
 
-    private void CheckVerticalMatches()
-    {
-        // 各列を左から順に調べる
-        for(int x = 0; x < width; x++)
-        {
-            // 縦方向に３個以上並んでいるか確認
-            for( int y = 0; y < height - 2; y++)
-            {
-                PuzzleBlock piece1 = board[x, y];
-                PuzzleBlock piece2 = board[x, y + 1];
-                PuzzleBlock piece3 = board[x, y + 2];
+    //private void CheckHorizintalMatches()
+    //{
+    //    // 各行を上から順番に調べる
+    //    for(int y = 0; y < height; y++)
+    //    {
+    //        // 横方向に３個並んでるか確認
+    //        for (int x = 0; x < width - 2; x++)
+    //        {
+    //            PuzzleBlock piece1 = board[x, y];
+    //            PuzzleBlock piece2 = board[x + 1, y];
+    //            PuzzleBlock piece3 = board[x + 2, y];
 
-                // 3個とも同じ属性か調べる
-                if (piece1.Type == piece2.Type && piece2.Type == piece3.Type)
-                {
-                    Debug.Log($"縦マッチ:({x},{y}) 属性 : {piece1.Type}");
-                }
-            }
-        }
-    }
+    //            // 3個とも同じ属性か調べる
+    //            if(piece1.Type == piece2.Type &&  piece2.Type == piece3.Type)
+    //            {
+    //                Debug.Log($"横マッチ:({x},{y}) 属性 : {piece1.Type}");
+    //            }
+    //        }
+    //    }
+    //}
 
-    private void CheckMatches()
-    {
-        Debug.Log("マッチ判定開始");
-        CheckHorizintalMatches();
-        CheckVerticalMatches();
-        Debug.Log("マッチ判定終了");
-    }
+    //private void CheckVerticalMatches()
+    //{
+    //    // 各列を左から順に調べる
+    //    for(int x = 0; x < width; x++)
+    //    {
+    //        // 縦方向に３個以上並んでいるか確認
+    //        for( int y = 0; y < height - 2; y++)
+    //        {
+    //            PuzzleBlock piece1 = board[x, y];
+    //            PuzzleBlock piece2 = board[x, y + 1];
+    //            PuzzleBlock piece3 = board[x, y + 2];
+
+    //            // 3個とも同じ属性か調べる
+    //            if (piece1.Type == piece2.Type && piece2.Type == piece3.Type)
+    //            {
+    //                Debug.Log($"縦マッチ:({x},{y}) 属性 : {piece1.Type}");
+    //            }
+    //        }
+    //    }
+    //}
+
+    //private void CheckMatches()
+    //{
+    //    Debug.Log("マッチ判定開始");
+    //    CheckHorizintalMatches();
+    //    CheckVerticalMatches();
+    //    Debug.Log("マッチ判定終了");
+    //}
 }

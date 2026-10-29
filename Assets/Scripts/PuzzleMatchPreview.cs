@@ -1,8 +1,8 @@
 using UnityEngine;
 
-[RequireComponent (typeof(PuzzleBoard))]
+[RequireComponent(typeof(PuzzleBoard))]
 public class PuzzleMatchPreview : MonoBehaviour
-{
+{ 
     public enum TestPattern
     {
         None,
@@ -37,10 +37,37 @@ public class PuzzleMatchPreview : MonoBehaviour
     [ContextMenu("Show Matches")]
     public void ShowMatches()
     {
-        if(puzzleBoard == null || puzzleBoard.Pieces == null)
+        if (puzzleBoard == null ||
+            puzzleBoard.Pieces == null)
         {
+            Debug.LogWarning(
+                "盤面が生成されていません");
             return;
         }
+        ClearHighlights();
+        PuzzleBlock[,] board = puzzleBoard.Pieces;
+        bool[,] marks = PuzzleMatcher.Find(board, includeVertical);
+        int width = board.GetLength(0);
+        int height = board.GetLength(1);
+
+        //マッチした石を色で表示
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                if (!marks[x, y])
+                {
+                    continue;
+                }
+                if (board[x, y] == null)
+                {
+                    continue;
+                }
+                board[x, y].SetMatched(true);
+            }
+        }
+        int count = PuzzleMatcher.Count(marks);
+        Debug.Log($"マッチ対象数：{count}個");
     }
 
     public void ClearHighlights()
@@ -92,17 +119,43 @@ public class PuzzleMatchPreview : MonoBehaviour
 
         switch (testPattern)
         {
-            case TestPattern.None: break;
+            case TestPattern.None:
+                break;
             case TestPattern.Horizontal3:
+                SetHorizontal(1, 2, 3);
+                break;
             case TestPattern.Vertical3:
+                SetVertical(2, 1, 3);
+                break;
             case TestPattern.Separate3:
+                SetHorizontal(1, 1, 3);
+                SetVertical(4, 2, 3);
+                break;
             case TestPattern.Horizontal4:
+                SetHorizontal(1, 2, 4);
+                break;
             case TestPattern.Horizontal5:
+                SetHorizontal(0, 2, 5);
+                break;
             case TestPattern.Horizontal6:
+                SetHorizontal(0, 2, 6);
+                break;
             case TestPattern.LShape:
+                SetHorizontal(1, 1, 3);
+                SetVertical(1, 1, 3);
+                break;
             case TestPattern.TShape:
+                SetHorizontal(1, 1, 3);
+                SetVertical(2, 1, 3);
+                break;
             case TestPattern.Edge2:
+                SetPiece(4, 0, PuzzleAttribute.Fire);
+                SetPiece(5, 0, PuzzleAttribute.Fire);
+                break;
             case TestPattern.RowWrap:
+                SetPiece(4, 0, PuzzleAttribute.Fire);
+                SetPiece(5, 0, PuzzleAttribute.Fire);
+                SetPiece(0, 1, PuzzleAttribute.Fire);
                 break;
         }
 

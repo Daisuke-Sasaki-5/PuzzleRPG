@@ -36,6 +36,8 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     // ドラッグ開始時のポインター位置
     private Vector2 startPointerPostion;
 
+    private bool IsDragging;
+
     private void Awake()
     {
         rectTransform = GetComponent<RectTransform>();
@@ -100,7 +102,12 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     /// <param name="eventData"></param>
     public void OnBeginDrag(PointerEventData eventData)
     {
+        IsDragging = false;
+
         if (puzzleBoard == null) { return; }
+
+        IsDragging = true;
+        puzzleBoard.BeginOperation();
 
         startPosition = rectTransform.anchoredPosition;
 
@@ -114,7 +121,7 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     /// <param name="eventData"></param>
     public void OnDrag(PointerEventData eventData)
     {
-        if (puzzleBoard == null) { return; }
+        if (puzzleBoard == null || !IsDragging) { return; }
 
         RectTransformUtility.ScreenPointToLocalPointInRectangle(puzzleBoard.PiecesRoot, eventData.position, eventData.pressEventCamera, out Vector2 currentPointerPosition);
 
@@ -131,7 +138,9 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     /// <param name="eventData"></param>
     public void OnEndDrag(PointerEventData eventData)
     {
-        if (puzzleBoard == null) { return; }
+        if (puzzleBoard == null || !IsDragging) { return; }
+
+        IsDragging = false;
 
         RectTransformUtility.ScreenPointToLocalPointInRectangle(puzzleBoard.PiecesRoot, eventData.position, eventData.pressEventCamera, out Vector2 endPointerPosition);
 
@@ -147,6 +156,7 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
         }
 
         // 後で
+        puzzleBoard.EndOperation();
     }
 
     /// <summary>
@@ -156,5 +166,15 @@ public class PuzzleBlock : MonoBehaviour, IBeginDragHandler,IDragHandler, IEndDr
     public void SetMatched(bool matched)
     {
         blockImage.color = matched ? new Color(1f, 0.5f, 0.5f, 1f) : Color.white;
+    }
+
+    /// <summary>
+    /// 配列上の座標を更新
+    /// </summary>
+    /// <param name="x"></param>
+    /// <param name="y"></param>
+    public void SetCoordinates(int  x, int y)
+    {
+        X = x; Y = y;   
     }
 }
