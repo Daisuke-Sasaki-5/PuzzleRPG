@@ -1,518 +1,428 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Runtime.Serialization.Formatters;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 public class PuzzleBoard : MonoBehaviour
 {
-    [Header("Prefab‚Æ¶¬æ")]
-    // ¶¬‚·‚éÎ‚ÌPrefab
-    [SerializeField] private GameObject PuzzlePicePrefab;
-    // Î‚ğ”z’u‚·‚éeƒIƒuƒWƒFƒNƒg
-    [SerializeField] private RectTransform PiceRoot;
-
-    [Header("‘®«‰æ‘œ")]
-    // Î‚ÌSpritei‰ÎA…A–ØAŒõAˆÅ‚Ì‡”Ôj
-    [SerializeField] private Sprite[] blockSprite = new Sprite[5];
-
-    [Header("Î‚Ì”z’uİ’è")]
-    // Î1ŒÂ‚Ì‘å‚«‚³
-    [SerializeField] private float cellSize = 100.0f;
-    // Î“¯m‚ÌŠÔŠu
-    [SerializeField] private float spacing = 0f;
-    // ¶ã‚ÌÎ‚Ì’†SÀ•W‚ğ•Û
-    private Vector2 firstCenter;
-    // ”Õ–Ê‚ğŠÇ—‚·‚é‚QŸŒ³”z—ñ
-    private PuzzleBlock[,] board;
-    // Î“¯m‚ÌŠÔŠu‚ğQÆ‚·‚é‚½‚ß‚ÌƒvƒƒpƒeƒB
-    public float Spacing => spacing;
-
-    [Header("”Õ–ÊƒTƒCƒY")]
-    // ‰¡•ûŒü‚Ìƒ}ƒX”
-    [SerializeField, Range(1, 6)] private int width = 6; 
-    // c•ûŒü‚Ìƒ}ƒX”
+    [SerializeField] private PuzzlePiece piecePrefab;
+    [SerializeField] private RectTransform piecesRoot;
+    [SerializeField] private Sprite[] attributeSprites
+        = new Sprite[5];
+    [SerializeField, Range(1, 6)] private int width = 6;
     [SerializeField, Range(1, 6)] private int height = 6;
 
-    [Header("‘€ìİ’è")]
-    // ‚±‚Ì‹——£ˆÈãƒhƒ‰ƒbƒO‚µ‚½‚çŒğŠ·‚ğ‚İ‚é
-    [SerializeField] private float dragThreshold = 30.0f;
+    private const float Spacing = 0f;
+    private float cellSize = 100f;
+    private Vector2 firstCenter;
+    private PuzzlePiece[,] board;
+    [SerializeField] private bool allowExchange = false;
+    [SerializeField] private bool highlightSelection = false;
+    private PuzzlePiece selected;
+    private int activePointerId;
+    private Vector2 previousPointer;
+    private int selectedSibling;
+    private PuzzlePiece[,] gestureStart;
+    private bool pathChanged;
 
-    // PuzzleBlock‚©‚çQÆ‚·‚é
-    public RectTransform PiecesRoot => PiceRoot;
-
-    public PuzzleBlock[,] Pieces => board;
-    private PuzzleMatchPreview matchPreview;
-
-    private PuzzleResolver resolver;
-    public bool IsResolving => resolver != null && resolver.IsBusy;
-
-    private bool isOperating;
-
-    public bool IsOperating => isOperating || IsResolving;
-
+    public PuzzlePiece[,] Pieces => board;
+    public RectTransform PiecesRoot => piecesRoot;
+    public bool IsResolving => GetComponent<PuzzleResolver>()?.IsBusy ?? false;
+    public bool IsOperating => selected != null || IsResolving;
     private void Start()
     {
         Build();
     }
 
-    /// <summary>
-    /// Î‚Ì‘å‚«‚³‚ÆÅ‰‚ÌÎ‚Ì’†SˆÊ’u‚ğİ’è‚·‚é
-    /// </summary>
-    private void ConfigureCells()
-    {
-        firstCenter = new Vector2(cellSize / 2f, cellSize / 2f);
-    }
-
-    /// <summary>
-    /// w’è‚µ‚½À•W‚ÌˆÊ’u‚ğ‹‚ß‚é
-    /// </summary>
-    /// <param name="x">”Õ–Êã‚ÌXÀ•W</param>
-    /// <param name="y">”Õ–Êã‚ÌYÀ•W</param>
-    /// <returns></returns>
-    private Vector2 GetCellPosition(int x, int y)
-    {
-        // Î‚Ì‘å‚«‚³‚ÆŠÔŠu‚ğ‡Œv‚·‚é
-        float step = cellSize + spacing;
-
-        // UI‚ÌYÀ•W‚Í‰º•ûŒü‚ªƒ}ƒCƒiƒX
-        return new Vector2(firstCenter.x + x * step,-(firstCenter.y + y * step));
-    }
-
-    /// <summary>
-    /// ƒpƒYƒ‹”Õ–Ê‚ğ¶¬‚·‚é
-    /// </summary>
     private void Build()
     {
-        if (PuzzlePicePrefab == null || PiceRoot == null)
+        if (piecePrefab == null || piecesRoot == null ||
+            attributeSprites == null ||
+            attributeSprites.Length != 5)
         {
-            Debug.LogError("Piece Prefab‚Ü‚½‚ÍPieceRoot‚ª–¢İ’è");
+            Debug.LogError("Prefab è¦ª Sprite5æšã‚’ç¢ºèª", this);
             return;
         }
 
-        if (blockSprite == null || blockSprite.Length != 5)
+        for (int i = 0; i < attributeSprites.Length; i++)
         {
-            Debug.LogError("blockSprite‚É‚Tí—Ş‚Ì‰æ‘œ‚ğİ’è‚µ‚Ä‚­‚¾‚³‚¢");
-            return;
-        }
-
-        for(int i =  0; i < blockSprite.Length; i++)
-        {
-            if(blockSprite[i] == null)
+            if (attributeSprites[i] == null)
             {
-                Debug.LogError($"blockSprite‚Ì{i}”Ô‚ª–¢İ’è‚Å‚·");
+                Debug.LogError("æœªè¨­å®šã®SpriteãŒã‚ã‚Šã¾ã™", this);
                 return;
             }
         }
 
-        // Î‚Ì”z’uî•ñ‚ğ€”õ‚·‚é
+        // Playé–‹å§‹æ™‚ã«ä¸€åº¦ç”Ÿæˆã™ã‚‹ã€‚
+        if (board != null) return; // Battle may initialize before this component's Start.
+
+        if(piecesRoot.childCount!=0) { Debug.LogError("Remove manual pieces before Play.",this); return; }
+        width = 6;
+        height = 6;
         ConfigureCells();
-
-        board = new PuzzleBlock[width,height];
-
-        for(int y  = 0; y < height; y++)
+        board = new PuzzlePiece[width, height];
+        for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
-                PuzzleAttribute type = (PuzzleAttribute)Random.Range(0,blockSprite.Length);
-                GameObject obj = Instantiate(PuzzlePicePrefab, PiceRoot, false);
-                PuzzleBlock piece =  obj.GetComponent<PuzzleBlock>();
-                //Hierarchy‚ÅŠm”F‚µ‚â‚·‚¢–¼‘O‚ğ‚Â‚¯‚é
+                PuzzleAttribute type = (PuzzleAttribute)Random.Range(0, 5);
+                PuzzlePiece piece = Instantiate(
+                    piecePrefab, piecesRoot, false);
                 piece.name = $"Piece_{x}_{y}";
-                piece.Setup(x, y, type, blockSprite[(int)type]);
+                piece.Setup(x, y, type,
+                    attributeSprites[(int)type]);
+                piece.Bind(this);
 
-                // Š‘®‚·‚é”Õ–Ê‚ğ“o˜^
-                piece.SetBoard(this);
-
-                RectTransform rect = piece.GetComponent<RectTransform>();
+                RectTransform rect =
+                    piece.GetComponent<RectTransform>();
                 rect.anchorMin = new Vector2(0f, 1f);
                 rect.anchorMax = new Vector2(0f, 1f);
                 rect.pivot = new Vector2(0.5f, 0.5f);
                 rect.localScale = Vector3.one;
                 rect.localRotation = Quaternion.identity;
-
                 rect.sizeDelta = new Vector2(cellSize, cellSize);
-                rect.anchoredPosition = GetCellPosition(x,y);
+                rect.anchoredPosition = GetCellPosition(x, y);
                 board[x, y] = piece;
             }
         }
+
+        PuzzlePiece first = board[0, 0];
+        Debug.Log($"å·¦ä¸Š {first.name} " +
+            $"åº§æ¨™({first.X},{first.Y}) å±æ€§{first.Type}", this);
     }
 
-    public bool TrySwap(PuzzleBlock piece, Vector2 delta)
+    // ãƒã‚¹ã®åº§æ¨™ã‚’ã€è¦ªã®å·¦ä¸Šã‹ã‚‰ã®è¡¨ç¤ºä½ç½®ã¸å¤‰æ›ã€‚
+    // ç”Ÿæˆæ™‚ã ã‘ã§ãªãã€äº¤æ›ãƒ»è½ä¸‹ã®ç§»å‹•å…ˆã«ã‚‚ä½¿ã†ã€‚
+    public Vector2 GetCellPosition(int x, int y)
     {
-        // ƒhƒ‰ƒbƒO‹——£‚ª’Z‚·‚¬‚éê‡‚ÍŒğŠ·‚µ‚È‚¢
-        if(delta.magnitude < dragThreshold)
+        float step = cellSize + Spacing;
+        return new Vector2(
+            firstCenter.x + x * step,
+            -(firstCenter.y + y * step));
+    }
+    private void ConfigureCells()
+    {
+        cellSize = 100f;
+        firstCenter = new Vector2(50f,50f);
+    }
+    public void BeginGesture(PuzzlePiece piece,
+        PointerEventData data)
+    {
+        if (!isActiveAndEnabled || board == null || IsOperating || HasEmptyCells() || piece == null ||
+            data.button != PointerEventData.InputButton.Left) return;
+        if (!Inside(piece.X, piece.Y) || board[piece.X, piece.Y] != piece) return;
+        if (!TryPointer(data, out Vector2 pointer)) return;
+        GetComponent<PuzzleMatchPreview>()?.ClearHighlights();
+        gestureStart = (PuzzlePiece[,])board.Clone();
+        pathChanged = false;
+        selected = piece;
+        activePointerId = data.pointerId;
+        previousPointer = pointer;
+        RectTransform rect = selected.GetComponent<RectTransform>();
+        selectedSibling = rect.GetSiblingIndex();
+        rect.SetAsLastSibling();
+        selected.SetSelected(highlightSelection);
+        rect.anchoredPosition = pointer;
+        Debug.Log($"é¸æŠ ({piece.X},{piece.Y}) {piece.Type}", this);
+    }
+
+    public void DragGesture(PointerEventData data)
+    {
+        if (!isActiveAndEnabled || selected == null || data.pointerId != activePointerId) return;
+        if (!TryPointer(data, out Vector2 pointer)) return;
+        if (allowExchange) FollowPath(previousPointer, pointer);
+        previousPointer = pointer;
+        selected.GetComponent<RectTransform>().anchoredPosition = pointer;
+    }
+
+    public void EndGesture(PointerEventData data)
+    {
+        if (selected == null || data.pointerId != activePointerId) return;
+        // Process the final pointer position even when no final OnDrag was delivered.
+        DragGesture(data);
+        FinishGesture();
+        ValidateBoard();
+        var resolver=GetComponent<PuzzleResolver>();
+        if(resolver!=null) resolver.TryResolve();
+        else Debug.LogError("Add PuzzleResolver before operating lesson5.",this);
+    }
+
+    private void FinishGesture()
+    {
+        if (selected != null)
         {
-            return false;
+            RectTransform rect = selected.GetComponent<RectTransform>();
+            rect.anchoredPosition = GetCellPosition(selected.X, selected.Y);
+            rect.SetSiblingIndex(selectedSibling);
+            selected.SetSelected(false);
         }
+        selected = null;
+        activePointerId = 0;
+        gestureStart = null;
+        pathChanged = false;
+    }
 
-        int targetX = piece.X;
-        int targetY = piece.Y;
-
-        // ˆÚ“®—Ê‚ª‘å‚«‚¢•ûŒü‚ğ—Dæ
-        if(Mathf.Abs(delta.x) >= Mathf.Abs(delta.y))
+    // Focus loss/pause cancels and restores the entire uncommitted path.
+    private void CancelGesture()
+    {
+        if (selected != null && gestureStart != null)
         {
-            // ‰¡•ûŒü‚ÌˆÚ“®
-            if(delta.x > 0f)
+            board = gestureStart;
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
             {
-                targetX++;
-            }
-            else
-            {
-                targetX--;
+                board[x,y].SetCoordinates(x,y);
+                board[x,y].GetComponent<RectTransform>().anchoredPosition = GetCellPosition(x,y);
             }
         }
-        else
-        {
-            // c•ûŒü‚ÌˆÚ“®
-            if(delta.y > 0f)
-            {
-                targetY--;
-            }
-            else
-            {
-                targetY++;
-            }
-        }
+        FinishGesture();
+    }
 
-        // ”Õ–Ê‚ÌŠO‚É‚ÍˆÚ“®‚Å‚«‚È‚¢
-        if(targetX < 0 || targetX >= width || targetY < 0 || targetY >= height) { return false; }
+    private void OnDisable() { CancelGesture(); }
+    private void OnApplicationFocus(bool focused)
+    {
+        if (!focused) CancelGesture();
+    }
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused) CancelGesture();
+    }
 
-        // ŒğŠ·æ‚ÌÎ‚ğæ“¾‚·‚é
-        PuzzleBlock targetPiece = board[targetX, targetY];
-        if(targetPiece == null)
-        {
-            return false;
-        }
+    private bool Inside(int x, int y)
+    {
+        return x >= 0 && x < width && y >= 0 && y < height;
+    }
 
-        // Î‚ğŒğŠ·‚·‚é
-        SwapPiece(piece, targetPiece);
+    // Returns pointer position in the left/top anchored UI coordinate system.
+    private bool TryPointer(PointerEventData data, out Vector2 pointer)
+    {
+        pointer = default;
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            piecesRoot, data.position, data.pressEventCamera, out Vector2 local)) return false;
+        Rect area = piecesRoot.rect;
+        float contentWidth = width * cellSize + (width - 1) * Spacing;
+        float contentHeight = height * cellSize + (height - 1) * Spacing;
+        pointer = new Vector2(
+            Mathf.Clamp(local.x - area.xMin, 0f, contentWidth),
+            -Mathf.Clamp(area.yMax - local.y, 0f, contentHeight));
         return true;
     }
 
-    private void SwapPiece(PuzzleBlock pieceA, PuzzleBlock pieceB)
+    // Traverse the segment's grid boundaries in order, including fast events.
+    // An exact corner crossing exchanges directly with the diagonal cell.
+    private void FollowPath(Vector2 from, Vector2 to)
     {
-        // ŒğŠ·‘O‚ÌÀ•W‚ğ•Û‘¶‚·‚é
-        int ax = pieceA.X;
-        int ay = pieceA.Y;
-        int bx = pieceB.X;
-        int by = pieceB.Y;
-
-        // 2ŸŒ³”z—ñ‚ÌQÆ‚ğ“ü‚ê‘Ö‚¦‚é
-        board[ax, ay] = pieceB;
-        board[bx, by] = pieceA;
-
-        // Î©g‚ÌÀ•Wî•ñ‚ğXV‚·‚é
-        pieceA.SetPosition(bx , by);
-        pieceB.SetPosition(ax , ay);
-
-        // RectTransform‚ğæ“¾‚·‚é
-        RectTransform rectA = pieceA.GetComponent<RectTransform>();
-        RectTransform rectB = pieceB.GetComponent<RectTransform>();
-
-        // •\¦ˆÊ’u‚ğŒğŠ·Œã‚Ìƒ}ƒX‚É‡‚í‚¹‚é
-        rectA.anchoredPosition = GetCellPosition(bx , by);
-        rectB.anchoredPosition = GetCellPosition(ax , ay);
-
-        // Hierarcyã‚Ì–¼‘O‚àXV‚·‚é
-        pieceA.name = $"Piece_{bx}_{by}";
-        pieceB.name = $"Piece_{ax}_{ay}";
-
-        Debug.Log($"Î‚ğŒğŠ·‚µ‚Ü‚µ‚½ : ({ax},{ay} <=> ({bx},{by}");
-
-        //CheckMatches();
+        double dx=(double)to.x-from.x, dy=(double)from.y-to.y;
+        int x=selected.X, y=selected.Y;
+        int endX=Mathf.Clamp(Mathf.FloorToInt(to.x/cellSize),0,width-1);
+        int endY=Mathf.Clamp(Mathf.FloorToInt(-to.y/cellSize),0,height-1);
+        int sx=dx>0 ? 1 : dx<0 ? -1 : 0;
+        int sy=dy>0 ? 1 : dy<0 ? -1 : 0;
+        while(x!=endX || y!=endY)
+        {
+            // Compare crossing times by cross products, recomputed from the
+            // original segment: no accumulated t error near an exact corner.
+            if(x==endX) y+=sy;
+            else if(y==endY) x+=sx;
+            else
+            {
+                double distX=(((sx>0 ? x+1 : x)*(double)cellSize)-from.x)*sx;
+                double distY=(((sy>0 ? y+1 : y)*(double)cellSize)+from.y)*sy;
+                double crossX=distX*System.Math.Abs(dy);
+                double crossY=distY*System.Math.Abs(dx);
+                if(crossX==crossY) { x+=sx; y+=sy; }
+                else if(crossX<crossY) x+=sx;
+                else y+=sy;
+            }
+            if(!Inside(x,y) || !TrySwap(selected,board[x,y])) return;
+        }
     }
 
-    public PuzzleBlock GetPiece(int x, int y)
+    private bool TrySwap(PuzzlePiece a, PuzzlePiece b)
     {
-        if (board == null)
-        {
-            return null;
-        }
-        if (x < 0 || x >= width ||
-            y < 0 || y >= height)
-        {
-            return null;
-        }
-        return board[x, y];
-    }
+        if (a == null || b == null || a == b) return false;
+        int ax = a.X, ay = a.Y;
+        int bx = b.X, by = b.Y;
+        if (!Inside(ax, ay) || !Inside(bx, by)) return false;
+        if (board[ax, ay] != a || board[bx, by] != b) return false;
+        int distance = Mathf.Max(Mathf.Abs(ax - bx), Mathf.Abs(ay - by));
+        if (distance != 1) return false;
 
-    /// <summary>
-    /// ‘€ìŠJn‚É‘O‰ñ‚Ì”»’è‚ğÁ‚·
-    /// </summary>
-    public bool BeginOperation()
-    {
-        if(isOperating || HasEmptyCells())
-        {
-            return false;
-        }
-        isOperating = true;
-
-        if(matchPreview != null)
-        {
-            matchPreview.ClearHighlights();
-        }
+        pathChanged = true;
+        board[ax, ay] = b;
+        board[bx, by] = a;
+        a.SetCoordinates(bx, by);
+        b.SetCoordinates(ax, ay);
+        // The held piece follows the pointer; only the displaced piece snaps.
+        if (a != selected)
+            a.GetComponent<RectTransform>().anchoredPosition = GetCellPosition(bx, by);
+        b.GetComponent<RectTransform>().anchoredPosition =
+            GetCellPosition(ax, ay);
+        Debug.Log($"äº¤æ› ({ax},{ay}) ã¨ ({bx},{by})", this);
+        ValidateBoard();
         return true;
     }
 
-    /// <summary>
-    /// ‘€ìI—¹‚É”Õ–Ê‚ğ”»’è‚·‚é
-    /// </summary>
-    public void EndOperation()
+    [ContextMenu("Validate Board")]
+    public bool ValidateBoard()
     {
-        if (!isOperating) { return; }
-
-        isOperating = false;
-        if(resolver != null)
-        {
-            resolver.TryResolve(); 
-        }
-        else if(matchPreview != null)
-        {
-            matchPreview.ShowMatches();
-        }
-    }
-
-    /// <summary>
-    /// Î‚ÌTransform‚ğİ’è‚·‚é
-    /// </summary>
-    /// <param name="piece"></param>
-    /// <returns></returns>
-    private RectTransform configurePiceRect(PuzzleBlock piece)
-    {
-        RectTransform rect = piece.GetComponent<RectTransform>();
-        rect.anchorMin = rect.anchorMax = new Vector2(0f, 1f);
-        rect.pivot = new Vector2(0f, 1f);
-        rect.localScale = Vector3.one;
-        rect.localRotation = Quaternion.identity;
-        rect.sizeDelta = new Vector2(cellSize, cellSize);
-        return rect;
-    }
-
-    /// <summary>
-    /// ‹ó‚«ƒ}ƒX‚ª‘¶İ‚·‚é‚©Šm”F
-    /// </summary>
-    /// <returns></returns>
-    public bool HasEmptyCells()
-    {
-        if(board == null)
-        {
-            return false;
-        }
-        foreach (PuzzleBlock piece in board)
-        {
-            if(piece == null)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// Î‚ğíœ
-    /// </summary>
-    /// <param name="marks"></param>
-    /// <returns></returns>
-    public int RemoveMarked(bool[,] marks)
-    {
-        int removed = 0;
-        for(int y = 0; y < height;  y++)
-        {
-            for(int x = 0; x < width; x++)
-            {
-                if(!marks[x, y] || board[x,y] == null) { continue; }
-                PuzzleBlock piece = board[x,y];
-                // ”z—ñ‚©‚çQÆ‚ğŠO‚·
-                board[x,y] = null;
-
-                piece.gameObject.SetActive(false);
-                Destroy(piece.gameObject);
-                removed++;
-            }
-        }
-        return removed;
-    }
-
-    /// <summary>
-    /// c‚Á‚½Î‚ğ‰º•ûŒü‚É‚Â‚ß‚é
-    /// </summary>
-    public void CollapsePieces()
-    {
-        for(int x = 0; x < height; x++)
-        {
-            int writeY = height - 1;
-            // ‰º‚©‚çã‚Ö’²‚×‚é
-            for(int readY = height - 1; readY >= 0; readY--)
-            {
-                PuzzleBlock piece = board[x, readY];
-                if(piece == null) { continue;}
-                if(readY != writeY)
-                {
-                    board[x,readY] = null;
-                    board[x,writeY] = piece;
-                }
-
-                piece.SetCoordinates(x, writeY);
-                writeY--;
-            }
-        }
-    }
-
-    public void RefillPiece(bool useFixedRefill)
-    {
+        if (board == null) return false;
+        var seen = new HashSet<PuzzlePiece>();
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
-                if (board[x, y] != null) { continue; }
-                int index;
-
-                if (useFixedRefill)
+                PuzzlePiece piece = board[x, y];
+                if (piece == null || !seen.Add(piece) || piece.X != x || piece.Y != y)
                 {
-                    // ŒÅ’èƒeƒXƒg—p
-                    index = (x + 2 * y) % 5;
+                    Debug.LogError($"é…åˆ—ã¨çŸ³ã®åº§æ¨™ãŒä¸ä¸€è‡´ ({x},{y})", this);
+                    return false;
                 }
-                else
+                Vector2 pos = piece.GetComponent<RectTransform>()
+                    .anchoredPosition;
+                if (piece != selected && Vector2.Distance(pos, GetCellPosition(x, y)) > 0.01f)
                 {
-                    index = Random.Range(0, blockSprite.Length);
+                    Debug.LogError($"è¡¨ç¤ºä½ç½®ãŒä¸ä¸€è‡´ ({x},{y})", this);
+                    return false;
                 }
-                PuzzleBlock piece = Instantiate(PuzzlePicePrefab, PiceRoot, false);
-
-                piece.Setup(x, y, (PuzzleAttribute)index, blockSprite[index]);
-
-                piece.SetBoard(this);
-                RectTransform rect = configurePiceRect(piece);
-
-                rect.anchoredPosition = GetCellPosition(x, y - height);
-                board[x, y] = piece;
             }
         }
+        return true;
     }
+public bool HasEmptyCells()
+{
+    if (board == null) return true;
+    foreach (PuzzlePiece piece in board)
+        if (piece == null) return true;
+    return false;
+}
 
-    public IEnumerator AnimateToCells(float duration)
+public int RemoveMarked(bool[,] marks)
+{
+    int removed = 0;
+    for (int y = 0; y < height; y++)
+    for (int x = 0; x < width; x++)
     {
-        List<RectTransform> rects = new List<RectTransform> ();
-        List<Vector2> starts = new List<Vector2> ();
-        List<Vector2> target = new List<Vector2> ();
-
-        for(int y = 0; y < height;y++)
-        {
-            for(int x = 0; x < width;x++)
-            {
-                PuzzleBlock piece = board[x, y];
-                if(piece == null) { continue; }
-                RectTransform rect = piece.GetComponent<RectTransform>();
-
-                rects.Add(rect);
-                starts.Add(rect.anchoredPosition);
-                target.Add(GetCellPosition(x, y));
-            }
-        }
-
-        float elapsed = 0f;
-        if(duration > 0f)
-        {
-            while (elapsed < duration)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                float t = Mathf.Clamp01 (elapsed / duration);
-
-                for(int i = 0; i < rects.Count; i++)
-                {
-                    rects[i].anchoredPosition = Vector2.Lerp(starts[i], target[i], t);
-                }
-                yield return null;
-            }
-        }
-
-        for(int i =0; i < rects.Count;i++)
-        {
-            rects[i].anchoredPosition = target[i];
-        }
+        if (!marks[x, y] || board[x, y] == null) continue;
+        PuzzlePiece piece = board[x, y];
+        board[x, y] = null;
+        piece.gameObject.SetActive(false);
+        Destroy(piece.gameObject);
+        removed++;
     }
+    return removed;
+}
 
-    public bool ValidateBoard()
+public void CollapsePieces()
+{
+    for (int x = 0; x < width; x++)
     {
-        if(board == null) {  return false; }
-        bool valid = true;
-
-        HashSet<PuzzleBlock> found = new HashSet<PuzzleBlock>();
-
-        for(int y = 0; y < height; y++)
+        int writeY = height - 1;
+        for (int readY = height - 1; readY >= 0; readY--)
         {
-            for(int x = 0; x < width; x++)
+            PuzzlePiece piece = board[x, readY];
+            if (piece == null) continue;
+            if (readY != writeY)
             {
-                PuzzleBlock piece = board[x, y];
-                if(piece == null) { valid = false; continue; }
-                
-                if(!found.Add(piece))
-                {
-                    valid = false;
-                }
-
-                if(piece.X != x || piece.Y != y)
-                {
-                    valid |= false;
-                }
-
-                Vector2 position = piece.GetComponent<RectTransform>().anchoredPosition;
-
-                if (Vector2.Distance(position, GetCellPosition(x,y)) > 0.1f)
-                {
-                    valid = false;
-                }
+                board[x, readY] = null;
+                board[x, writeY] = piece;
             }
+            piece.SetCoordinates(x, writeY);
+            writeY--;
         }
-        return valid;
     }
+}
 
-    //private void CheckHorizintalMatches()
-    //{
-    //    // Šes‚ğã‚©‚ç‡”Ô‚É’²‚×‚é
-    //    for(int y = 0; y < height; y++)
-    //    {
-    //        // ‰¡•ûŒü‚É‚RŒÂ•À‚ñ‚Å‚é‚©Šm”F
-    //        for (int x = 0; x < width - 2; x++)
-    //        {
-    //            PuzzleBlock piece1 = board[x, y];
-    //            PuzzleBlock piece2 = board[x + 1, y];
-    //            PuzzleBlock piece3 = board[x + 2, y];
+public void RefillPieces(bool fixedPattern)
+{
+    for (int y = 0; y < height; y++)
+    for (int x = 0; x < width; x++)
+    {
+        if (board[x, y] != null) continue;
+        int index = fixedPattern ? (x + 2 * y) % 5 :
+            Random.Range(0, attributeSprites.Length);
+        PuzzlePiece piece = Instantiate(piecePrefab, piecesRoot, false);
+        piece.Setup(x, y, (PuzzleAttribute)index, attributeSprites[index]);
+        piece.Bind(this);
+        RectTransform rect = piece.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(0f, 1f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.localScale = Vector3.one;
+        rect.localRotation = Quaternion.identity;
+        rect.sizeDelta = new Vector2(cellSize, cellSize);
+        rect.anchoredPosition = GetCellPosition(x, y - height);
+        board[x, y] = piece;
+    }
+}
 
-    //            // 3ŒÂ‚Æ‚à“¯‚¶‘®«‚©’²‚×‚é
-    //            if(piece1.Type == piece2.Type &&  piece2.Type == piece3.Type)
-    //            {
-    //                Debug.Log($"‰¡ƒ}ƒbƒ`:({x},{y}) ‘®« : {piece1.Type}");
-    //            }
-    //        }
-    //    }
-    //}
+// ãƒ¢ãƒ‡ãƒ«æ›´æ–°å¾Œã€å„çŸ³ã‚’ç™»éŒ²æ¸ˆã¿ã®ãƒã‚¹ã®ä¸­å¿ƒã¸å‹•ã‹ã™ã€‚
+public IEnumerator AnimateToCells(float duration)
+{
+    var rects = new List<RectTransform>();
+    var starts = new List<Vector2>();
+    var goals = new List<Vector2>();
+    for (int y = 0; y < height; y++)
+    for (int x = 0; x < width; x++)
+    {
+        if (board[x, y] == null) continue;
+        RectTransform rect = board[x, y].GetComponent<RectTransform>();
+        rects.Add(rect);
+        starts.Add(rect.anchoredPosition);
+        goals.Add(GetCellPosition(x, y));
+    }
+    float elapsed = 0f;
+    while (elapsed < duration)
+    {
+        elapsed += Time.unscaledDeltaTime;
+        float t = Mathf.Clamp01(elapsed / duration);
+        for (int i = 0; i < rects.Count; i++)
+            rects[i].anchoredPosition = Vector2.Lerp(starts[i], goals[i], t);
+        yield return null;
+    }
+    for (int i = 0; i < rects.Count; i++)
+        rects[i].anchoredPosition = goals[i];
+}
 
-    //private void CheckVerticalMatches()
-    //{
-    //    // Še—ñ‚ğ¶‚©‚ç‡‚É’²‚×‚é
-    //    for(int x = 0; x < width; x++)
-    //    {
-    //        // c•ûŒü‚É‚RŒÂˆÈã•À‚ñ‚Å‚¢‚é‚©Šm”F
-    //        for( int y = 0; y < height - 2; y++)
-    //        {
-    //            PuzzleBlock piece1 = board[x, y];
-    //            PuzzleBlock piece2 = board[x, y + 1];
-    //            PuzzleBlock piece3 = board[x, y + 2];
 
-    //            // 3ŒÂ‚Æ‚à“¯‚¶‘®«‚©’²‚×‚é
-    //            if (piece1.Type == piece2.Type && piece2.Type == piece3.Type)
-    //            {
-    //                Debug.Log($"cƒ}ƒbƒ`:({x},{y}) ‘®« : {piece1.Type}");
-    //            }
-    //        }
-    //    }
-    //}
-
-    //private void CheckMatches()
-    //{
-    //    Debug.Log("ƒ}ƒbƒ`”»’èŠJn");
-    //    CheckHorizintalMatches();
-    //    CheckVerticalMatches();
-    //    Debug.Log("ƒ}ƒbƒ`”»’èI—¹");
-    //}
+[ContextMenu("Lesson 5 / Apply Two Step Test")]
+ public void ApplyTwoStepTest()
+{
+    if(!Application.isPlaying||IsOperating||board==null||HasEmptyCells()||board.GetLength(0)!=6||board.GetLength(1)!=6)return;
+    // é…åˆ—ã®å¤–å´ã¯xã€å†…å´ã¯y
+    int[,] types=
+    {
+        {
+            0,2,4,1,3,1
+        }
+        ,
+        {
+            1,3,0,2,4,1
+        }
+        ,
+        {
+            2,4,1,0,0,0
+        }
+        ,
+        {
+            3,0,2,4,1,3
+        }
+        ,
+        {
+            4,1,3,0,2,4
+        }
+        ,
+        {
+            0,2,4,1,3,0
+        }
+    }
+    ;
+    for(int y=0;y<6;y++)for(int x=0;x<6;x++)
+    {
+        int i=types[x,y];
+        board[x,y].SetAttribute((PuzzleAttribute)i,attributeSprites[i]);
+        board[x,y].SetMatched(false);
+    }
+    Debug.Log("Two Step Test é©ç”¨å®Œäº†");
+}
 }

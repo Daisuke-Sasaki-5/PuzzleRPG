@@ -1,109 +1,86 @@
 using System.Collections;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
-
-[RequireComponent (typeof(PuzzleBoard))]
-public class PuzzleResolver : MonoBehaviour
+[RequireComponent(typeof(PuzzleBoard))]
+public class PuzzleResolver:MonoBehaviour
 {
-    [Header("’iŠKİ’è")]
-    [SerializeField] private bool refillEnabled = false;
-    [SerializeField] private bool repeartMatches = false;
-
-    [Header("ŒÅ’èƒeƒXƒg")]
-    [SerializeField] private bool useFixedRefill = false;
-
-    [Header("ŠÔİ’è")]
-    [SerializeField, Min(0f)] private float fallDuration = 0f;
-
-    [SerializeField, Min(0f)] private float phaseWaite = 0.25f;
-
-    [Header("UI")]
-    [SerializeField] private TMP_Text comboText;
-
-    private PuzzleBoard owner;
-    private Coroutine resolveCoroutine;
-
-    // ‰ğŒˆ’†‚©‚Ç‚¤‚©
-    public bool IsBusy {  get; private set; }
-
-    // ¡‰ñ‚Ì‘€ì‚Å”­¶‚µ‚½ƒRƒ“ƒ{”
-    public int TotalCombos {  get; private set; }
-
-    // ÀÛ‚ÉÁ‹‚µ‚½Î‚Ì”
-    public int TotalCleared {  get; private set; }
-
-    // Á‹ˆ—‚ğÀs‚µ‚½‰ñ”
-    public int ClearRounds {  get; private set; }
-
-    // ‰‰ñˆÈ~‚Ì’Ç‰Á˜A½‰ñ”
-    public int ExtraChains => Mathf.Max(0, ClearRounds - 1);
-
-    private void Awake()
+    [SerializeField] bool refillEnabled=false,repeatMatches=false,useFixedRefill=false;
+    [SerializeField,Min(0f)] float fallDuration=0f,phaseWait=.25f;
+    [SerializeField] TMP_Text comboText;
+    PuzzleBoard owner;
+    public bool IsBusy
     {
-        owner = GetComponent<PuzzleBoard>();
+        get;
+        private set;
     }
-
-    private void Start()
+    public int TotalCombos
     {
-        
+        get;
+        private set;
     }
-
-    [ContextMenu("Resolve Now")]
-    public void TryResolve()
+    public int TotalCleared
     {
-        if (IsBusy) { return; }
-        if(owner == null || owner.Pieces == null) { return; }
-
-        TotalCombos = 0;
-        TotalCleared = 0;
-        ClearRounds = 0;
-
+        get;
+        private set;
+    }
+    public int ClearRounds
+    {
+        get;
+        private set;
+    }
+    public int ExtraChains=>Mathf.Max(0,ClearRounds-1);
+    void Awake()
+    {
+        owner=GetComponent<PuzzleBoard>();
+    }
+    void Start()
+    {
         RefreshLabel();
-
-        // ƒRƒ‹[ƒ`ƒ“ŠJn
-        IsBusy = true;
     }
-
-    private IEnumerator ResolveRoutine()
+    void RefreshLabel()
     {
-        const int maxClearRounds = 20;
-
-        while (true)
+        if(comboText!=null)comboText.text=$"{TotalCombos} Combo";
+    }
+    [ContextMenu("Resolve Now")]
+ public void TryResolve()
+    {
+        if(IsBusy||owner.Pieces==null||owner.IsOperating||owner.HasEmptyCells())return;
+        TotalCombos=TotalCleared=ClearRounds=0;
+        RefreshLabel();
+        IsBusy=true;
+        StartCoroutine(ResolveRoutine());
+    }
+    IEnumerator ResolveRoutine()
+    {
+        const int maxRounds=20;
+        while(true)
         {
-            bool[,] marks = PuzzleMatcher.Find(owner.Pieces, true);
-
-            int count = PuzzleMatcher.Count(marks);
-
-            if (count == 0)
+            bool[,] marks=PuzzleMatcher.Find(owner.Pieces,true);
+            int count=PuzzleMatcher.Count(marks);
+            if(count==0)break;
+            int groups=PuzzleComboCounter.Count(owner.Pieces,marks);
+            TotalCombos+=groups;
+            RefreshLabel();
+            Debug.Log($"ç¬¬{ClearRounds+1}å›ï¼šå¯¾è±¡{count}å€‹ / {groups}çµ„");
+            if(phaseWait>0)yield return new WaitForSecondsRealtime(phaseWait);
+            TotalCleared+=owner.RemoveMarked(marks);
+            ClearRounds++;
+            owner.CollapsePieces();
+            yield return owner.AnimateToCells(fallDuration);
+            if(!refillEnabled)break;
+            owner.RefillPieces(useFixedRefill);
+            yield return owner.AnimateToCells(fallDuration);
+            owner.ValidateBoard();
+            if(!repeatMatches)break;
+            if(ClearRounds>=maxRounds)
             {
+                int remain=PuzzleMatcher.Count(PuzzleMatcher.Find(owner.Pieces,true));
+                if(remain>0)Debug.LogWarning($"{maxRounds}æ¶ˆå»å›ã§ä¸­æ–­ï¼šæ®‹ã‚Š{remain}å€‹");
                 break;
             }
-
-            int combos = PuzzleComboCounter.Count(owner.Pieces, marks);
-
-            TotalCombos += combos;
-            RefreshLabel();
-
-            Debug.Log($"‘æ{ClearRounds + 1}‰ñÁ‹:" + $"‘ÎÛ{count}ŒÂ/{combos}‘g");
-
-            if(phaseWaite > 0f)
-            {
-                yield return new WaitForSecondsRealtime(phaseWaite);
-            }
-
-            
         }
-    }
-
-    /// <summary>
-    /// ƒRƒ“ƒ{”‚ğUI‚É•\¦‚·‚é
-    /// </summary>
-    private void RefreshLabel()
-    {
-        if(comboText  != null)
-        {
-            comboText.text = $"{TotalCombos} Combo";
-        }
+        RefreshLabel();
+        Debug.Log($"æ¶ˆå»{TotalCleared}å€‹ / {TotalCombos} Combo / æ¶ˆå»{ClearRounds}å› / è¿½åŠ é€£é–{ExtraChains}å›");
+        IsBusy=false;
     }
 }

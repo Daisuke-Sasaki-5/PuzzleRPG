@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 5304058650585294049}
   - component: {fileID: 3151410929230586854}
   - component: {fileID: 393914045900903583}
-  - component: {fileID: 1332599834010768455}
+  - component: {fileID: 3498609623790207237}
   m_Layer: 5
   m_Name: PuzzlePiece
   m_TagString: Untagged
@@ -76,7 +76,7 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &1332599834010768455
+--- !u!114 &3498609623790207237
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -85,7 +85,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 5854020451396882100}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 18dca7ccc2495a24da69ca5a74a1a45c, type: 3}
+  m_Script: {fileID: 11500000, guid: eb60cb88d8427c44fbe049abff100b2b, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PuzzleBlock
-  blockImage: {fileID: 393914045900903583}
+  m_EditorClassIdentifier: Assembly-CSharp::PuzzlePiece
+  image: {fileID: 393914045900903583}
