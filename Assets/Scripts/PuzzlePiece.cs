@@ -65,16 +65,4 @@ public class PuzzlePiece : MonoBehaviour,
     {
         if (owner != null) owner.EndGesture(data);
     }
-
-    public void SetAttribute(PuzzleAttribute type,Sprite sprite)
-    {
-        Type=type;
-        if(image==null) image=GetComponent<Image>();
-        image.sprite=sprite;
-    }
-    public void SetMatched(bool matched)
-    {
-        if(image==null) image=GetComponent<Image>();
-        image.color=matched ? new Color(1f,.65f,.65f,1f) : Color.white;
-    }
 }

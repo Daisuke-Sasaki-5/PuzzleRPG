@@ -2,39 +2,43 @@ using System.Collections.Generic;
 using UnityEngine;
 public static class PuzzleComboCounter
 {
-    public static int Count(PuzzlePiece[,] b,bool[,] marks)
+    public static int Count(PuzzlePiece[,] board, bool[,] marks)
     {
-        int w=b.GetLength(0),h=b.GetLength(1),combos=0;
-        bool[,] visited=new bool[w,h];
-        int[] dx=
+        int width = board.GetLength(0);
+        int height = board.GetLength(1);
+        bool[,] visited = new bool[width, height];
+        int groups = 0;
+        var queue = new Queue<Vector2Int>();
+        int[] dx =
         {
-            1,-1,0,0
-        }
-        ,dy=
+        1, - 1, 0, 0
+        };
+        int[] dy =
         {
-            0,0,1,-1
-        }
-        ;
-        for(int y=0;y<h;y++)for(int x=0;x<w;x++)
-        {
-            if(!marks[x,y]||visited[x,y]||b[x,y]==null)continue;
-            combos++;
-            var type=b[x,y].Type;
-            var q=new Queue<Vector2Int>();
-            q.Enqueue(new Vector2Int(x,y));
-            visited[x,y]=true;
-            while(q.Count>0)
+        0, 0, 1, - 1
+        };
+
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++)
             {
-                var p=q.Dequeue();
-                for(int k=0;k<4;k++)
+                if (!marks[x, y] || visited[x, y] || board[x, y] == null) continue;
+                groups++;
+                PuzzleAttribute type = board[x, y].Type;
+                visited[x, y] = true;
+                queue.Enqueue(new Vector2Int(x, y));
+                while (queue.Count > 0)
                 {
-                    int nx=p.x+dx[k],ny=p.y+dy[k];
-                    if(nx<0||ny<0||nx>=w||ny>=h||!marks[nx,ny]||visited[nx,ny]||b[nx,ny]==null||b[nx,ny].Type!=type)continue;
-                    visited[nx,ny]=true;
-                    q.Enqueue(new Vector2Int(nx,ny));
+                    Vector2Int cell = queue.Dequeue();
+                    for (int i = 0; i < 4; i++)
+                    {
+                        int nx = cell.x + dx[i];
+                        int ny = cell.y + dy[i];
+                        if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+                        if (!marks[nx, ny] || visited[nx, ny] || board[nx, ny] == null || board[nx, ny].Type != type) continue;
+                        visited[nx, ny] = true;
+                        queue.Enqueue(new Vector2Int(nx, ny));
+                    }
                 }
             }
-        }
-        return combos;
+        return groups;
     }
 }

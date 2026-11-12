@@ -1,7 +1,55 @@
 public static class PuzzleMatcher {
- public static bool[,] Find(PuzzlePiece[,] b,bool vertical){int w=b.GetLength(0),h=b.GetLength(1);bool[,] m=new bool[w,h];
- for(int y=0;y<h;y++){int x=0;while(x<w){if(b[x,y]==null){x++;continue;}int s=x;var t=b[x,y].Type;x++;while(x<w&&b[x,y]!=null&&b[x,y].Type==t)x++;if(x-s>=3)for(int i=s;i<x;i++)m[i,y]=true;}}
- if(vertical)for(int x=0;x<w;x++){int y=0;while(y<h){if(b[x,y]==null){y++;continue;}int s=y;var t=b[x,y].Type;y++;while(y<h&&b[x,y]!=null&&b[x,y].Type==t)y++;if(y-s>=3)for(int i=s;i<y;i++)m[x,i]=true;}}
- return m;}
- public static int Count(bool[,] marks){int n=0;foreach(bool m in marks)if(m)n++;return n;}
+    public static bool[,] Find(PuzzlePiece[,] board, bool includeVertical = true)
+    {
+        if (board == null) return new bool[0, 0];
+        int width = board.GetLength(0);
+        int height = board.GetLength(1);
+        bool[,] marks = new bool[width, height];
+        for (int y = 0; y < height; y++)
+        {
+            int x = 0;
+            while (x < width)
+            {
+                if (board[x, y] == null)
+                {
+                    x++;
+                    continue;
+                }
+                int start = x;
+                PuzzleAttribute type = board[x, y].Type;
+                x++;
+                while (x < width && board[x, y] != null && board[x, y].Type == type) x++;
+                int length = x - start;
+                if (length >= 3) for (int i = start; i < x; i++) marks[i, y] = true;
+            }
+        }
+        if (!includeVertical) return marks;
+        for (int x = 0; x < width; x++)
+        {
+            int y = 0;
+            while (y < height)
+            {
+                if (board[x, y] == null)
+                {
+                    y++;
+                    continue;
+                }
+                int start = y;
+                PuzzleAttribute type = board[x, y].Type;
+                y++;
+                while (y < height && board[x, y] != null && board[x, y].Type == type) y++;
+                int length = y - start;
+                if (length >= 3) for (int i = start; i < y; i++) marks[x, i] = true;
+            }
+        }
+        return marks;
+    }
+
+    public static int Count(bool[,] marks)
+    {
+        int count = 0;
+        foreach (bool marked in marks) if (marked) count++;
+        return count;
+    }
+
 }
